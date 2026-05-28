@@ -1,0 +1,276 @@
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+export type Database = {
+  public: {
+    Tables: {
+      profiles: {
+        Row: Profile;
+        Insert: Partial<Profile> & { id: string; role: Role };
+        Update: Partial<Profile>;
+      };
+      households: {
+        Row: Household;
+        Insert: Partial<Household> & { owner_id: string; name: string };
+        Update: Partial<Household>;
+      };
+      pets: {
+        Row: Pet;
+        Insert: Partial<Pet> & { owner_id: string; household_id: string; name: string };
+        Update: Partial<Pet>;
+      };
+      sitter_profiles: {
+        Row: SitterProfile;
+        Insert: Partial<SitterProfile> & { user_id: string };
+        Update: Partial<SitterProfile>;
+      };
+      house_sitting_requests: {
+        Row: HouseSittingRequest;
+        Insert: Partial<HouseSittingRequest> & { owner_id: string; household_id: string; title: string };
+        Update: Partial<HouseSittingRequest>;
+      };
+      request_pets: {
+        Row: RequestPet;
+        Insert: Partial<RequestPet> & { request_id: string; pet_id: string };
+        Update: Partial<RequestPet>;
+      };
+      handover_checklist_items: {
+        Row: HandoverChecklistItem;
+        Insert: Partial<HandoverChecklistItem> & { request_id: string; owner_id: string; title: string };
+        Update: Partial<HandoverChecklistItem>;
+      };
+      sitter_requests: {
+        Row: SitterRequest;
+        Insert: Partial<SitterRequest> & { request_id: string; owner_id: string; sitter_id: string };
+        Update: Partial<SitterRequest>;
+      };
+      sitting_agreements: {
+        Row: SittingAgreement;
+        Insert: Partial<SittingAgreement> & { request_id: string; sitter_request_id: string; owner_id: string; sitter_id: string };
+        Update: Partial<SittingAgreement>;
+      };
+      trust_badges: {
+        Row: TrustBadge;
+        Insert: Partial<TrustBadge> & { sitter_id: string; badge_type: string; label: string };
+        Update: Partial<TrustBadge>;
+      };
+      public_sitters: {
+        Row: PublicSitter;
+        Insert: never;
+        Update: never;
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+};
+
+export type Role = "owner" | "sitter" | "professional" | "admin";
+
+export type Profile = {
+  id: string;
+  full_name: string | null;
+  role: Role;
+  phone: string | null;
+  city: string | null;
+  neighborhood: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Household = {
+  id: string;
+  owner_id: string;
+  name: string;
+  city: string | null;
+  neighborhood: string | null;
+  household_type: string | null;
+  has_plants: boolean;
+  has_mail_pickup: boolean;
+  has_alarm: boolean;
+  has_cameras: boolean;
+  parking_notes: string | null;
+  house_rules: string | null;
+  access_notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Pet = {
+  id: string;
+  owner_id: string;
+  household_id: string;
+  name: string;
+  species: string | null;
+  breed: string | null;
+  age: string | null;
+  size: string | null;
+  temperament: string | null;
+  feeding_instructions: string | null;
+  medication: string | null;
+  allergies: string | null;
+  fears: string | null;
+  behavior_people: string | null;
+  behavior_animals: string | null;
+  veterinarian_contact: string | null;
+  emergency_contact: string | null;
+  never_do: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SitterProfile = {
+  id: string;
+  user_id: string;
+  bio: string | null;
+  motivation: string | null;
+  animal_experience: string | null;
+  accepts_dogs: boolean;
+  accepts_cats: boolean;
+  accepts_small_animals: boolean;
+  overnight_stays: boolean;
+  daily_visits: boolean;
+  dog_walking: boolean;
+  emergency_help: boolean;
+  medication_experience: boolean;
+  senior_pet_experience: boolean;
+  puppy_experience: boolean;
+  reactive_dog_experience: boolean;
+  multiple_pet_experience: boolean;
+  rate_range: string | null;
+  availability_notes: string | null;
+  available_weekends: boolean;
+  available_weekday_evenings: boolean;
+  available_mornings: boolean;
+  available_short_notice: boolean;
+  unavailable_until: string | null;
+  reference_contact: string | null;
+  video_intro_url: string | null;
+  phone_verified: boolean;
+  reference_checked: boolean;
+  video_intro_reviewed: boolean;
+  admin_public_note: string | null;
+  admin_private_note: string | null;
+  approval_status: "pending_approval" | "approved" | "rejected";
+  is_featured: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HouseSittingRequest = {
+  id: string;
+  owner_id: string;
+  household_id: string;
+  title: string;
+  start_date: string;
+  end_date: string;
+  sitting_type: string;
+  preferred_time_windows: string | null;
+  tasks: string[] | null;
+  sitter_requirements: string[] | null;
+  budget_range: string | null;
+  notes: string | null;
+  urgency: "normal" | "urgent";
+  status: "open" | "matched" | "cancelled" | "completed";
+  created_at: string;
+  updated_at: string;
+};
+
+export type RequestPet = {
+  id: string;
+  request_id: string;
+  pet_id: string;
+};
+
+export type HandoverChecklistItem = {
+  id: string;
+  request_id: string;
+  owner_id: string;
+  title: string;
+  details: string | null;
+  category: "pet_care" | "home" | "access" | "safety" | "plants_mail" | "other";
+  is_required: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SitterRequest = {
+  id: string;
+  request_id: string;
+  owner_id: string;
+  sitter_id: string;
+  message: string | null;
+  status: "sent" | "accepted" | "declined" | "cancelled" | "completed";
+  sitter_response: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SittingAgreement = {
+  id: string;
+  request_id: string;
+  sitter_request_id: string;
+  owner_id: string;
+  sitter_id: string;
+  status: "confirmed" | "cancelled" | "completed";
+  owner_note: string | null;
+  confirmed_at: string;
+  cancelled_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TrustBadge = {
+  id: string;
+  sitter_id: string;
+  badge_type: string;
+  label: string;
+  verified_at: string | null;
+  created_at: string;
+};
+
+export type PublicSitter = Pick<
+  SitterProfile,
+  | "id"
+  | "user_id"
+  | "bio"
+  | "motivation"
+  | "animal_experience"
+  | "accepts_dogs"
+  | "accepts_cats"
+  | "accepts_small_animals"
+  | "overnight_stays"
+  | "daily_visits"
+  | "dog_walking"
+  | "emergency_help"
+  | "medication_experience"
+  | "senior_pet_experience"
+  | "puppy_experience"
+  | "reactive_dog_experience"
+  | "multiple_pet_experience"
+  | "rate_range"
+  | "availability_notes"
+  | "available_weekends"
+  | "available_weekday_evenings"
+  | "available_mornings"
+  | "available_short_notice"
+  | "unavailable_until"
+  | "video_intro_url"
+  | "phone_verified"
+  | "reference_checked"
+  | "video_intro_reviewed"
+  | "admin_public_note"
+  | "approval_status"
+  | "is_featured"
+  | "created_at"
+  | "updated_at"
+> & {
+  full_name: string | null;
+  city: string | null;
+  neighborhood: string | null;
+  avatar_url: string | null;
+};
