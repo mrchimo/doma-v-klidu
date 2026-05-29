@@ -4,6 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { dashboardForRole, requireProfile } from "@/lib/auth";
+import {
+  dispatchDueEmailNotifications,
+  queueSitterApprovedEmail,
+  queueSitterRequestResponseEmail,
+  queueSitterRequestSentEmail,
+  queueSittingReminderEmail
+} from "@/lib/email-notifications";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const roleSchema = z.enum(["owner", "sitter", "professional"]);
@@ -124,6 +131,7 @@ export async function signUpAction(formData: FormData) {
     await supabase.from("profiles").upsert({
       id: data.user.id,
       full_name: parsed.full_name,
+      email: parsed.email,
       role: parsed.role
     });
   }
@@ -349,13 +357,20 @@ export async function deleteHandoverChecklistItemAction(formData: FormData) {
 export async function sendSitterRequestAction(formData: FormData) {
   const { user } = await requireProfile(["owner"]);
   const supabase = await createSupabaseServerClient();
-  await supabase.from("sitter_requests").insert({
-    request_id: String(formData.get("request_id")),
-    owner_id: user.id,
-    sitter_id: String(formData.get("sitter_id")),
-    message: text(formData, "message"),
-    status: "sent"
-  });
+  const { data: sitterRequest, error } = await supabase
+    .from("sitter_requests")
+    .insert({
+      request_id: String(formData.get("request_id")),
+      owner_id: user.id,
+      sitter_id: String(formData.get("sitter_id")),
+      message: text(formData, "message"),
+      status: "sent"
+    })
+    .select("id")
+    .single();
+
+  if (error || !sitterRequest) redirect(`/sitters/${String(formData.get("sitter_id"))}?error=request`);
+  await queueSitterRequestSentEmail(sitterRequest.id);
   revalidatePath("/owner/dashboard");
   redirect(`/owner/requests/${String(formData.get("request_id"))}`);
 }
@@ -392,18 +407,23 @@ export async function confirmSittingAgreementAction(formData: FormData) {
     redirect(`/owner/requests/${parsed.request_id}?error=agreement`);
   }
 
-  const { error } = await supabase.from("sitting_agreements").insert({
-    request_id: parsed.request_id,
-    sitter_request_id: parsed.sitter_request_id,
-    owner_id: user.id,
-    sitter_id: sitterRequest.sitter_id,
-    owner_note: parsed.owner_note?.trim() ? parsed.owner_note.trim() : null,
-    status: "confirmed"
-  });
+  const { data: agreement, error } = await supabase
+    .from("sitting_agreements")
+    .insert({
+      request_id: parsed.request_id,
+      sitter_request_id: parsed.sitter_request_id,
+      owner_id: user.id,
+      sitter_id: sitterRequest.sitter_id,
+      owner_note: parsed.owner_note?.trim() ? parsed.owner_note.trim() : null,
+      status: "confirmed"
+    })
+    .select("id")
+    .single();
 
   if (error) redirect(`/owner/requests/${parsed.request_id}?error=agreement`);
 
   await supabase.from("house_sitting_requests").update({ status: "matched" }).eq("id", parsed.request_id).eq("owner_id", user.id);
+  if (agreement) await queueSittingReminderEmail(agreement.id);
   revalidatePath("/owner/dashboard");
   revalidatePath("/sitter/dashboard");
   revalidatePath(`/owner/requests/${parsed.request_id}`);
@@ -435,12 +455,15 @@ export async function cancelSittingAgreementAction(formData: FormData) {
 async function updateSitterRequestStatus(formData: FormData, status: "accepted" | "declined") {
   const { user } = await requireProfile(["sitter", "professional"]);
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
+  const { data: sitterRequest, error } = await supabase
     .from("sitter_requests")
     .update({ status, sitter_response: text(formData, "sitter_response") })
     .eq("id", String(formData.get("id")))
-    .eq("sitter_id", user.id);
+    .eq("sitter_id", user.id)
+    .select("id")
+    .single();
   if (error) redirect(`/sitter/dashboard?error=${encodeURIComponent(error.message)}`);
+  if (sitterRequest) await queueSitterRequestResponseEmail(sitterRequest.id);
   revalidatePath("/sitter/dashboard");
   redirect("/sitter/dashboard");
 }
@@ -456,10 +479,14 @@ export async function declineSitterRequestAction(formData: FormData) {
 export async function approveSitterAction(formData: FormData) {
   await requireProfile(["admin"]);
   const supabase = await createSupabaseServerClient();
+  const userId = String(formData.get("user_id"));
+  const approvalStatus = String(formData.get("approval_status")) as "approved" | "rejected" | "pending_approval";
+  const { data: existing } = await supabase.from("sitter_profiles").select("approval_status").eq("user_id", userId).maybeSingle();
   await supabase
     .from("sitter_profiles")
-    .update({ approval_status: String(formData.get("approval_status")) as "approved" | "rejected" | "pending_approval" })
-    .eq("user_id", String(formData.get("user_id")));
+    .update({ approval_status: approvalStatus })
+    .eq("user_id", userId);
+  if (approvalStatus === "approved" && existing?.approval_status !== "approved") await queueSitterApprovedEmail(userId);
   revalidatePath("/admin/sitters");
   revalidatePath("/sitters");
 }
@@ -485,4 +512,11 @@ export async function updateSitterTrustAction(formData: FormData) {
   revalidatePath("/admin/sitters");
   revalidatePath("/sitters");
   revalidatePath(`/sitters/${userId}`);
+}
+
+export async function dispatchDueEmailNotificationsAction() {
+  await requireProfile(["admin"]);
+  await dispatchDueEmailNotifications();
+  revalidatePath("/admin/notifications");
+  redirect("/admin/notifications");
 }

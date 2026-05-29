@@ -53,18 +53,18 @@ where u.email in (
 )
 on conflict (provider_id, provider) do nothing;
 
-insert into public.profiles (id, full_name, role, phone, city, neighborhood)
+insert into public.profiles (id, full_name, role, email, phone, city, neighborhood)
 values
-  ('00000000-0000-0000-0000-000000000001','Admin Doma v klidu','admin','+420 700 000 001','Praha','Letná'),
-  ('00000000-0000-0000-0000-000000000101','Eva Novotná','owner','+420 700 100 101','Praha 7','Letná'),
-  ('00000000-0000-0000-0000-000000000102','Petr Svoboda','owner','+420 700 100 102','Praha 3','Vinohrady'),
-  ('00000000-0000-0000-0000-000000000103','Lucie Horáková','owner','+420 700 100 103','Brno-střed','Veveří'),
-  ('00000000-0000-0000-0000-000000000201','Anna Dvořáková','sitter','+420 700 200 201','Praha 7','Letná'),
-  ('00000000-0000-0000-0000-000000000202','Marek Procházka','sitter','+420 700 200 202','Praha 3','Vinohrady'),
-  ('00000000-0000-0000-0000-000000000203','Tereza Malá','sitter','+420 700 200 203','Olomouc','centrum'),
-  ('00000000-0000-0000-0000-000000000204','Jakub Král','sitter','+420 700 200 204','Zlín','centrum'),
-  ('00000000-0000-0000-0000-000000000205','Sára Fialová','professional','+420 700 200 205','Brno-střed','Veveří')
-on conflict (id) do update set full_name = excluded.full_name;
+  ('00000000-0000-0000-0000-000000000001','Admin Doma v klidu','admin','admin@domavklidu.cz','+420 700 000 001','Praha','Letná'),
+  ('00000000-0000-0000-0000-000000000101','Eva Novotná','owner','eva@demo.cz','+420 700 100 101','Praha 7','Letná'),
+  ('00000000-0000-0000-0000-000000000102','Petr Svoboda','owner','petr@demo.cz','+420 700 100 102','Praha 3','Vinohrady'),
+  ('00000000-0000-0000-0000-000000000103','Lucie Horáková','owner','lucie@demo.cz','+420 700 100 103','Brno-střed','Veveří'),
+  ('00000000-0000-0000-0000-000000000201','Anna Dvořáková','sitter','anna@demo.cz','+420 700 200 201','Praha 7','Letná'),
+  ('00000000-0000-0000-0000-000000000202','Marek Procházka','sitter','marek@demo.cz','+420 700 200 202','Praha 3','Vinohrady'),
+  ('00000000-0000-0000-0000-000000000203','Tereza Malá','sitter','tereza@demo.cz','+420 700 200 203','Olomouc','centrum'),
+  ('00000000-0000-0000-0000-000000000204','Jakub Král','sitter','jakub@demo.cz','+420 700 200 204','Zlín','centrum'),
+  ('00000000-0000-0000-0000-000000000205','Sára Fialová','professional','sara@demo.cz','+420 700 200 205','Brno-střed','Veveří')
+on conflict (id) do update set full_name = excluded.full_name, email = excluded.email;
 
 insert into public.sitter_profiles (user_id, bio, motivation, animal_experience, accepts_dogs, accepts_cats, accepts_small_animals, overnight_stays, daily_visits, dog_walking, emergency_help, medication_experience, senior_pet_experience, puppy_experience, reactive_dog_experience, multiple_pet_experience, rate_range, availability_notes, available_weekends, available_weekday_evenings, available_mornings, available_short_notice, unavailable_until, reference_contact, video_intro_url, phone_verified, reference_checked, video_intro_reviewed, admin_public_note, admin_private_note, approval_status, is_featured)
 values

@@ -70,6 +70,7 @@ Všechny demo účty mají heslo `password123`.
 - Majitel i sitter vidí jednoduché porovnání shody mezi poptávkou a profilem sittera.
 - Majitel vidí stavovou osu poptávky od vytvoření přes oslovení sittera až po připravené předání a dokončení.
 - Majitel odešle žádost vybranému sitterovi.
+- Systém vytvoří e-mailovou notifikaci při nové žádosti, odpovědi sittera, schválení sittera a připomenutí před začátkem hlídání.
 - Sitter žádost přijme nebo odmítne.
 - Majitel potvrdí přijatou žádost jako domluvené hlídání.
 - Majitel i sitter vidí potvrzenou domluvu s termínem, domácností a poznámkou.
@@ -98,4 +99,15 @@ Platby, pojištění, ověření identity, real-time chat, recenze bez dokončen
 - Platby a storno pravidla.
 - Pojištění a odpovědnost při hlídání.
 - Ověření identity a telefonu.
-- Real-time chat a notifikace.
+- Real-time chat, in-app/push notifikace a pokročilé automatizace.
+
+## E-mailové notifikace
+
+MVP používá tabulku `email_notifications` jako jednoduchý outbox. Pokud jsou nastavené proměnné `RESEND_API_KEY` a `EMAIL_FROM`, aplikace se pokusí e-mail odeslat přes Resend. Bez provideru se notifikace uloží jako čekající a admin je vidí na `/admin/notifications`. Připomenutí před začátkem hlídání se plánuje pro sittera i majitele.
+
+Pro připomenutí před začátkem hlídání spusťte pravidelně:
+
+```bash
+curl -X POST "$NEXT_PUBLIC_SITE_URL/api/notifications/dispatch" \
+  -H "Authorization: Bearer $NOTIFICATION_DISPATCH_SECRET"
+```

@@ -53,6 +53,11 @@ export type Database = {
         Insert: Partial<TrustBadge> & { sitter_id: string; badge_type: string; label: string };
         Update: Partial<TrustBadge>;
       };
+      email_notifications: {
+        Row: EmailNotification;
+        Insert: Partial<EmailNotification> & { notification_type: EmailNotificationType; subject: string; body: string };
+        Update: Partial<EmailNotification>;
+      };
       public_sitters: {
         Row: PublicSitter;
         Insert: never;
@@ -72,6 +77,7 @@ export type Profile = {
   id: string;
   full_name: string | null;
   role: Role;
+  email: string | null;
   phone: string | null;
   city: string | null;
   neighborhood: string | null;
@@ -231,6 +237,29 @@ export type TrustBadge = {
   label: string;
   verified_at: string | null;
   created_at: string;
+};
+
+export type EmailNotificationType = "sitter_request_sent" | "sitter_request_responded" | "sitter_approved" | "sitting_reminder";
+
+export type EmailNotification = {
+  id: string;
+  recipient_id: string | null;
+  recipient_email: string | null;
+  notification_type: EmailNotificationType;
+  subject: string;
+  body: string;
+  action_url: string | null;
+  status: "pending" | "sent" | "failed";
+  scheduled_for: string;
+  sent_at: string | null;
+  provider: string | null;
+  provider_message_id: string | null;
+  error_message: string | null;
+  related_request_id: string | null;
+  related_sitter_request_id: string | null;
+  related_agreement_id: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type PublicSitter = Pick<

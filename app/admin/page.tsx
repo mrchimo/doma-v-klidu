@@ -26,6 +26,7 @@ export default async function AdminPage() {
           <ButtonLink href="/admin/sitters" variant="secondary">Sitteři</ButtonLink>
           <ButtonLink href="/admin/requests" variant="secondary">Poptávky</ButtonLink>
           <ButtonLink href="/admin/users" variant="secondary">Uživatelé</ButtonLink>
+          <ButtonLink href="/admin/notifications" variant="secondary">E-maily</ButtonLink>
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
