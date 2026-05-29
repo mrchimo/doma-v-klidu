@@ -17,11 +17,13 @@ export default async function OwnerDashboardPage() {
       .from("sitting_agreements")
       .select("*, request:house_sitting_requests(title, start_date, end_date), sitter:profiles!sitting_agreements_sitter_id_fkey(full_name, city, neighborhood)")
       .eq("owner_id", profile.id)
-      .eq("status", "confirmed")
+      .in("status", ["confirmed", "completed"])
       .order("confirmed_at", { ascending: false })
   ]);
   const openRequests = requests?.filter((request) => request.status === "open") ?? [];
   const pendingReplies = sent?.filter((item) => item.status === "sent").length ?? 0;
+  const activeAgreements = agreements?.filter((agreement) => agreement.status === "confirmed") ?? [];
+  const completedAgreements = agreements?.filter((agreement) => agreement.status === "completed") ?? [];
 
   return (
     <Shell>
@@ -41,7 +43,7 @@ export default async function OwnerDashboardPage() {
         <Card className="shadow-none"><p className="text-sm text-stone-600">Domácnosti</p><p className="mt-1 text-2xl font-bold">{households?.length ?? 0}</p></Card>
         <Card className="shadow-none"><p className="text-sm text-stone-600">Mazlíčci</p><p className="mt-1 text-2xl font-bold">{pets?.length ?? 0}</p></Card>
         <Card className="shadow-none"><p className="text-sm text-stone-600">Čeká na odpověď</p><p className="mt-1 text-2xl font-bold">{pendingReplies}</p></Card>
-        <Card className="shadow-none"><p className="text-sm text-stone-600">Domluveno</p><p className="mt-1 text-2xl font-bold">{agreements?.length ?? 0}</p></Card>
+        <Card className="shadow-none"><p className="text-sm text-stone-600">Domluveno</p><p className="mt-1 text-2xl font-bold">{activeAgreements.length}</p></Card>
       </div>
 
       {!households?.length || !pets?.length ? (
@@ -76,17 +78,18 @@ export default async function OwnerDashboardPage() {
 
       <section className="mt-5 grid gap-4 lg:grid-cols-3">
         <Card>
-          <h2 className="text-xl font-semibold">Domluvená hlídání</h2>
+          <h2 className="text-xl font-semibold">Domluvená a dokončená hlídání</h2>
           <div className="mt-4 grid gap-3">
             {agreements?.length ? agreements.map((agreement) => (
               <Link key={agreement.id} href={`/owner/requests/${agreement.request_id}#agreement`} className="rounded-lg border border-forest-100 p-3 hover:bg-forest-50">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="font-semibold">{agreement.request?.title}</h3>
-                  <Badge>Domluveno</Badge>
+                  <Badge tone={agreement.status === "completed" ? "muted" : "green"}>{agreement.status === "completed" ? "Dokončeno" : "Domluveno"}</Badge>
                 </div>
                 <p className="mt-1 text-sm text-stone-600">{agreement.sitter?.full_name} · {formatDate(agreement.request?.start_date)} - {formatDate(agreement.request?.end_date)}</p>
               </Link>
             )) : <p className="text-sm text-stone-600">Zatím nemáte potvrzené hlídání.</p>}
+            {completedAgreements.length ? <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Dokončeno: {completedAgreements.length}</p> : null}
           </div>
         </Card>
         <Card>

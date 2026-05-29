@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, Clock3 } from "lucide-react";
-import { addHandoverChecklistItemAction, cancelSitterRequestAction, cancelSittingAgreementAction, confirmSittingAgreementAction, deleteHandoverChecklistItemAction } from "@/app/actions";
+import { addHandoverChecklistItemAction, cancelSitterRequestAction, cancelSittingAgreementAction, completeSittingWithFeedbackAction, confirmSittingAgreementAction, deleteHandoverChecklistItemAction } from "@/app/actions";
 import { Badge, ButtonLink, Card, EmptyState, Field, Header, InfoBox, Shell, SubmitButton, inputClass, textAreaClass } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { checklistCategoryLabels, formatDate, labelFor, requestStatusLabels, requirementLabels, sitterRequestStatusLabels, sittingAgreementStatusLabels, sittingTypeLabels, taskLabels } from "@/lib/labels";
@@ -7,11 +7,37 @@ import { buildRequestTimeline } from "@/lib/request-timeline";
 import { evaluateSitterFit } from "@/lib/sitter-fit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+function feedbackAnswer(value: boolean) {
+  return value ? "Ano" : "Ne";
+}
+
+function feedbackTone(value: boolean): "green" | "amber" {
+  return value ? "green" : "amber";
+}
+
+function FeedbackQuestion({ label, name, defaultValue = "yes" }: { label: string; name: string; defaultValue?: "yes" | "no" }) {
+  return (
+    <fieldset className="grid gap-2 rounded-lg border border-forest-100 bg-white p-3">
+      <legend className="text-sm font-semibold text-forest-950">{label}</legend>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-forest-100 px-3 py-2 text-sm font-semibold text-forest-900">
+          <input type="radio" name={name} value="yes" defaultChecked={defaultValue === "yes"} required />
+          Ano
+        </label>
+        <label className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-forest-100 px-3 py-2 text-sm font-semibold text-forest-900">
+          <input type="radio" name={name} value="no" defaultChecked={defaultValue === "no"} required />
+          Ne
+        </label>
+      </div>
+    </fieldset>
+  );
+}
+
 export default async function RequestDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { profile } = await requireProfile(["owner"]);
   const supabase = await createSupabaseServerClient();
-  const [{ data: request }, { data: sent }, { data: requestPets }, { data: checklist }, { data: agreement }] = await Promise.all([
+  const [{ data: request }, { data: sent }, { data: requestPets }, { data: checklist }, { data: agreement }, { data: feedback }] = await Promise.all([
     supabase.from("house_sitting_requests").select("*, household:households(name, city, neighborhood)").eq("id", id).eq("owner_id", profile.id).single(),
     supabase.from("sitter_requests").select("*, sitter:profiles!sitter_requests_sitter_id_fkey(full_name, city, neighborhood)").eq("request_id", id).eq("owner_id", profile.id),
     supabase.from("request_pets").select("pet:pets(name, species, breed)").eq("request_id", id),
@@ -21,7 +47,15 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
       .select("*, sitter:profiles!sitting_agreements_sitter_id_fkey(full_name, city, neighborhood)")
       .eq("request_id", id)
       .eq("owner_id", profile.id)
-      .eq("status", "confirmed")
+      .in("status", ["confirmed", "completed"])
+      .order("confirmed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("sitting_feedback")
+      .select("*")
+      .eq("request_id", id)
+      .eq("owner_id", profile.id)
       .maybeSingle()
   ]);
   const sitterIds = sent?.map((item) => item.sitter_id).filter(Boolean) ?? [];
@@ -77,7 +111,11 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
                 </div>
               </div>
               {request.notes ? <p className="mt-5 rounded-lg bg-linen p-4 text-stone-700">{request.notes}</p> : null}
-              {agreement ? (
+              {agreement && agreement.status === "completed" ? (
+                <InfoBox title="Hlídání je dokončené">
+                  Poptávka je uzavřená. Interní zpětná vazba pomůže adminovi držet kvalitu služby bez veřejných recenzí.
+                </InfoBox>
+              ) : agreement ? (
                 <InfoBox title="Poptávka je domluvená">
                   Máte potvrzeného sittera. Checklist můžete dál zpřesnit, aby bylo předání co nejklidnější.
                 </InfoBox>
@@ -195,11 +233,67 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
                   <div><dt className="font-semibold">Potvrzeno</dt><dd>{formatDate(agreement.confirmed_at)}</dd></div>
                 </dl>
                 {agreement.owner_note ? <p className="mt-4 rounded-lg bg-linen p-3 text-sm leading-6 text-stone-700">{agreement.owner_note}</p> : null}
-                <form action={cancelSittingAgreementAction} className="mt-4">
-                  <input type="hidden" name="request_id" value={request.id} />
-                  <input type="hidden" name="id" value={agreement.id} />
-                  <button className="min-h-11 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-50">Zrušit domluvu</button>
-                </form>
+                {agreement.status === "confirmed" ? (
+                  <form action={cancelSittingAgreementAction} className="mt-4">
+                    <input type="hidden" name="request_id" value={request.id} />
+                    <input type="hidden" name="id" value={agreement.id} />
+                    <button className="min-h-11 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-50">Zrušit domluvu</button>
+                  </form>
+                ) : null}
+              </Card>
+            ) : null}
+
+            {agreement ? (
+              <Card id="feedback">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold">Interní zpětná vazba</h2>
+                    <p className="mt-1 text-sm text-stone-600">Není veřejná recenze. Slouží pro bezpečnost, kvalitu služby a lepší další domluvu.</p>
+                  </div>
+                  <Badge tone={feedback ? "green" : "amber"}>{feedback ? "Uloženo" : "Čeká na uzavření"}</Badge>
+                </div>
+
+                {feedback ? (
+                  <div className="mt-4 grid gap-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-forest-100 p-3">
+                        <p className="text-sm text-stone-600">Proběhlo hlídání v pořádku?</p>
+                        <Badge tone={feedbackTone(feedback.went_well)}>{feedbackAnswer(feedback.went_well)}</Badge>
+                      </div>
+                      <div className="rounded-lg border border-forest-100 p-3">
+                        <p className="text-sm text-stone-600">Dorazil sitter včas?</p>
+                        <Badge tone={feedbackTone(feedback.sitter_on_time)}>{feedbackAnswer(feedback.sitter_on_time)}</Badge>
+                      </div>
+                      <div className="rounded-lg border border-forest-100 p-3">
+                        <p className="text-sm text-stone-600">Byly instrukce jasné?</p>
+                        <Badge tone={feedbackTone(feedback.instructions_clear)}>{feedbackAnswer(feedback.instructions_clear)}</Badge>
+                      </div>
+                      <div className="rounded-lg border border-forest-100 p-3">
+                        <p className="text-sm text-stone-600">Chcete sittera použít znovu?</p>
+                        <Badge tone={feedbackTone(feedback.would_book_again)}>{feedbackAnswer(feedback.would_book_again)}</Badge>
+                      </div>
+                    </div>
+                    {feedback.owner_note ? <p className="rounded-lg bg-linen p-3 text-sm leading-6 text-stone-700">{feedback.owner_note}</p> : null}
+                  </div>
+                ) : (
+                  <form action={completeSittingWithFeedbackAction} className="mt-4 grid gap-3 rounded-lg bg-linen p-4">
+                    <input type="hidden" name="agreement_id" value={agreement.id} />
+                    <input type="hidden" name="request_id" value={request.id} />
+                    <p className="text-sm leading-6 text-stone-700">
+                      Po skončení hlídání uzavřete poptávku a vyplňte krátkou interní kontrolu. Po odeslání už se domluva nebude zobrazovat jako aktivní.
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <FeedbackQuestion label="Proběhlo hlídání v pořádku?" name="went_well" />
+                      <FeedbackQuestion label="Dorazil sitter včas?" name="sitter_on_time" />
+                      <FeedbackQuestion label="Byly instrukce jasné?" name="instructions_clear" />
+                      <FeedbackQuestion label="Chcete sittera použít znovu?" name="would_book_again" />
+                    </div>
+                    <Field label="Interní poznámka pro tým" name="owner_note">
+                      <textarea className={textAreaClass} id="owner_note" name="owner_note" placeholder="Co se povedlo, co příště ověřit, případně proč byste sittera znovu neoslovili." />
+                    </Field>
+                    <SubmitButton>Uzavřít hlídání a uložit zpětnou vazbu</SubmitButton>
+                  </form>
+                )}
               </Card>
             ) : null}
 

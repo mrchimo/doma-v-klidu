@@ -30,6 +30,10 @@ function text(formData: FormData, key: string) {
   return typeof value === "string" && value.length ? value : null;
 }
 
+function yesNo(formData: FormData, key: string) {
+  return z.enum(["yes", "no"]).parse(formData.get(key)) === "yes";
+}
+
 function defaultChecklistItems(tasks: string[], ownerId: string, requestId: string) {
   const taskTemplates: Record<string, { title: string; details: string; category: "pet_care" | "home" | "safety" | "plants_mail" | "other" }> = {
     feeding: {
@@ -442,7 +446,8 @@ export async function cancelSittingAgreementAction(formData: FormData) {
     .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
     .eq("id", id)
     .eq("request_id", requestId)
-    .eq("owner_id", user.id);
+    .eq("owner_id", user.id)
+    .eq("status", "confirmed");
 
   if (error) redirect(`/owner/requests/${requestId}?error=agreement`);
 
@@ -451,6 +456,73 @@ export async function cancelSittingAgreementAction(formData: FormData) {
   revalidatePath("/sitter/dashboard");
   revalidatePath(`/owner/requests/${requestId}`);
   redirect(`/owner/requests/${requestId}#agreement`);
+}
+
+export async function completeSittingWithFeedbackAction(formData: FormData) {
+  const { user } = await requireProfile(["owner"]);
+  const supabase = await createSupabaseServerClient();
+  const parsed = z.object({
+    agreement_id: z.string().uuid(),
+    request_id: z.string().uuid(),
+    owner_note: z.string().max(1000).optional()
+  }).parse({
+    agreement_id: formData.get("agreement_id"),
+    request_id: formData.get("request_id"),
+    owner_note: formData.get("owner_note") ?? undefined
+  });
+
+  const { data: agreement } = await supabase
+    .from("sitting_agreements")
+    .select("id, request_id, sitter_request_id, owner_id, sitter_id, status")
+    .eq("id", parsed.agreement_id)
+    .eq("request_id", parsed.request_id)
+    .eq("owner_id", user.id)
+    .in("status", ["confirmed", "completed"])
+    .single();
+
+  if (!agreement) redirect(`/owner/requests/${parsed.request_id}?error=feedback`);
+
+  const now = new Date().toISOString();
+  const { error: feedbackError } = await supabase
+    .from("sitting_feedback")
+    .upsert({
+      agreement_id: agreement.id,
+      request_id: agreement.request_id,
+      owner_id: user.id,
+      sitter_id: agreement.sitter_id,
+      went_well: yesNo(formData, "went_well"),
+      sitter_on_time: yesNo(formData, "sitter_on_time"),
+      instructions_clear: yesNo(formData, "instructions_clear"),
+      would_book_again: yesNo(formData, "would_book_again"),
+      owner_note: parsed.owner_note?.trim() ? parsed.owner_note.trim() : null
+    }, { onConflict: "agreement_id" });
+
+  if (feedbackError) redirect(`/owner/requests/${parsed.request_id}?error=${encodeURIComponent(feedbackError.message)}`);
+
+  await Promise.all([
+    supabase
+      .from("sitting_agreements")
+      .update({ status: "completed", completed_at: now })
+      .eq("id", agreement.id)
+      .eq("owner_id", user.id),
+    supabase
+      .from("house_sitting_requests")
+      .update({ status: "completed" })
+      .eq("id", agreement.request_id)
+      .eq("owner_id", user.id),
+    supabase
+      .from("sitter_requests")
+      .update({ status: "completed" })
+      .eq("id", agreement.sitter_request_id)
+      .eq("owner_id", user.id)
+  ]);
+
+  revalidatePath("/owner/dashboard");
+  revalidatePath("/sitter/dashboard");
+  revalidatePath("/admin");
+  revalidatePath("/admin/requests");
+  revalidatePath(`/owner/requests/${parsed.request_id}`);
+  redirect(`/owner/requests/${parsed.request_id}#feedback`);
 }
 
 async function updateSitterRequestStatus(formData: FormData, status: "accepted" | "declined") {

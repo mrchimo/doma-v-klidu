@@ -75,8 +75,9 @@ Všechny demo účty mají heslo `password123`.
 - Sitter žádost přijme nebo odmítne.
 - Majitel potvrdí přijatou žádost jako domluvené hlídání.
 - Majitel i sitter vidí potvrzenou domluvu s termínem, domácností a poznámkou.
+- Majitel po skončení uzavře hlídání a uloží interní zpětnou vazbu bez veřejné recenze.
 - Majitel vidí stav žádosti.
-- Admin vidí uživatele, sitter profily a poptávky.
+- Admin vidí uživatele, sitter profily, poptávky a interní feedback po dokončení.
 
 ## Bezpečnost a RLS
 
