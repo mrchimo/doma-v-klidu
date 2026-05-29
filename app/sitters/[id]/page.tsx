@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { sendSitterRequestAction } from "@/app/actions";
+import { sendSitterRequestAction, toggleFavoriteSitterAction } from "@/app/actions";
 import { Badge, Card, Field, Header, InfoBox, Shell, SubmitButton, inputClass, textAreaClass } from "@/components/ui";
 import { getCurrentProfile } from "@/lib/auth";
 import { availabilityLabels, formatDate, trustSignalLabels } from "@/lib/labels";
@@ -21,6 +21,14 @@ export default async function SitterDetailPage({ params }: { params: Promise<{ i
   const { data: ownerRequests } = profile?.role === "owner"
     ? await supabase.from("house_sitting_requests").select("*").eq("owner_id", profile.id).eq("status", "open")
     : { data: [] };
+  const { data: favorite } = profile?.role === "owner"
+    ? await supabase
+      .from("owner_favorite_sitters")
+      .select("id")
+      .eq("owner_id", profile.id)
+      .eq("sitter_id", id)
+      .maybeSingle()
+    : { data: null };
 
   async function requireOwnerAction() {
     "use server";
@@ -104,6 +112,16 @@ export default async function SitterDetailPage({ params }: { params: Promise<{ i
           </Card>
           <Card>
             <h2 className="text-xl font-semibold">Poslat žádost</h2>
+            {profile?.role === "owner" ? (
+              <form action={toggleFavoriteSitterAction} className="mt-3">
+                <input type="hidden" name="sitter_id" value={sitter.user_id} />
+                <input type="hidden" name="redirect_to" value={`/sitters/${sitter.user_id}`} />
+                <input type="hidden" name="intent" value={favorite ? "remove" : "add"} />
+                <button className="min-h-11 w-full rounded-lg border border-forest-200 bg-white px-4 py-2 text-sm font-semibold text-forest-800 hover:bg-forest-50">
+                  {favorite ? "Odebrat z oblíbených" : "Uložit sittera pro příště"}
+                </button>
+              </form>
+            ) : null}
             <InfoBox title="Co napsat do zprávy">
               Stačí krátce potvrdit termín, nejdůležitější potřebu mazlíčka a způsob předání instrukcí. Detailní přístup do bytu neposílejte před domluvou.
             </InfoBox>

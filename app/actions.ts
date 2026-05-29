@@ -30,6 +30,12 @@ function text(formData: FormData, key: string) {
   return typeof value === "string" && value.length ? value : null;
 }
 
+function internalPath(value: FormDataEntryValue | null, fallback = "/") {
+  if (typeof value !== "string") return fallback;
+  if (!value.startsWith("/") || value.startsWith("//")) return fallback;
+  return value;
+}
+
 function yesNo(formData: FormData, key: string) {
   return z.enum(["yes", "no"]).parse(formData.get(key)) === "yes";
 }
@@ -378,6 +384,33 @@ export async function sendSitterRequestAction(formData: FormData) {
   await queueSitterRequestSentEmail(sitterRequest.id);
   revalidatePath("/owner/dashboard");
   redirect(`/owner/requests/${String(formData.get("request_id"))}`);
+}
+
+export async function toggleFavoriteSitterAction(formData: FormData) {
+  const { user } = await requireProfile(["owner"]);
+  const supabase = await createSupabaseServerClient();
+  const sitterId = z.string().uuid().parse(formData.get("sitter_id"));
+  const intent = z.enum(["add", "remove"]).parse(formData.get("intent"));
+  const redirectTo = internalPath(formData.get("redirect_to"), "/sitters");
+
+  if (intent === "add") {
+    const { error } = await supabase
+      .from("owner_favorite_sitters")
+      .insert({ owner_id: user.id, sitter_id: sitterId });
+
+    if (error && error.code !== "23505") redirect(`${redirectTo}${redirectTo.includes("?") ? "&" : "?"}error=favorite`);
+  } else {
+    await supabase
+      .from("owner_favorite_sitters")
+      .delete()
+      .eq("owner_id", user.id)
+      .eq("sitter_id", sitterId);
+  }
+
+  revalidatePath("/owner/dashboard");
+  revalidatePath("/sitters");
+  revalidatePath(`/sitters/${sitterId}`);
+  redirect(redirectTo);
 }
 
 export async function cancelSitterRequestAction(formData: FormData) {

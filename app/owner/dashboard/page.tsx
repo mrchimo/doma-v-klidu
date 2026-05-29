@@ -8,7 +8,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export default async function OwnerDashboardPage() {
   const { profile } = await requireProfile(["owner"]);
   const supabase = await createSupabaseServerClient();
-  const [{ data: households }, { data: pets }, { data: requests }, { data: sent }, { data: agreements }] = await Promise.all([
+  const [{ data: households }, { data: pets }, { data: requests }, { data: sent }, { data: agreements }, { data: favorites }] = await Promise.all([
     supabase.from("households").select("*").eq("owner_id", profile.id),
     supabase.from("pets").select("*").eq("owner_id", profile.id),
     supabase.from("house_sitting_requests").select("*").eq("owner_id", profile.id).order("created_at", { ascending: false }),
@@ -18,8 +18,18 @@ export default async function OwnerDashboardPage() {
       .select("*, request:house_sitting_requests(title, start_date, end_date), sitter:profiles!sitting_agreements_sitter_id_fkey(full_name, city, neighborhood)")
       .eq("owner_id", profile.id)
       .in("status", ["confirmed", "completed"])
-      .order("confirmed_at", { ascending: false })
+      .order("confirmed_at", { ascending: false }),
+    supabase.from("owner_favorite_sitters").select("*").eq("owner_id", profile.id).order("created_at", { ascending: false })
   ]);
+  const favoriteIds = favorites?.map((favorite) => favorite.sitter_id) ?? [];
+  const { data: favoriteSitters } = favoriteIds.length
+    ? await supabase.from("public_sitters").select("*").in("user_id", favoriteIds)
+    : { data: [] };
+  const favoriteSitterById = new Map(favoriteSitters?.map((sitter) => [sitter.user_id, sitter]) ?? []);
+  const orderedFavoriteSitters = favorites?.flatMap((favorite) => {
+    const sitter = favoriteSitterById.get(favorite.sitter_id);
+    return sitter ? [sitter] : [];
+  }) ?? [];
   const openRequests = requests?.filter((request) => request.status === "open") ?? [];
   const pendingReplies = sent?.filter((item) => item.status === "sent").length ?? 0;
   const activeAgreements = agreements?.filter((agreement) => agreement.status === "confirmed") ?? [];
@@ -39,11 +49,12 @@ export default async function OwnerDashboardPage() {
         </div>
       </div>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="shadow-none"><p className="text-sm text-stone-600">Domácnosti</p><p className="mt-1 text-2xl font-bold">{households?.length ?? 0}</p></Card>
         <Card className="shadow-none"><p className="text-sm text-stone-600">Mazlíčci</p><p className="mt-1 text-2xl font-bold">{pets?.length ?? 0}</p></Card>
         <Card className="shadow-none"><p className="text-sm text-stone-600">Čeká na odpověď</p><p className="mt-1 text-2xl font-bold">{pendingReplies}</p></Card>
         <Card className="shadow-none"><p className="text-sm text-stone-600">Domluveno</p><p className="mt-1 text-2xl font-bold">{activeAgreements.length}</p></Card>
+        <Card className="shadow-none"><p className="text-sm text-stone-600">Oblíbení sitteři</p><p className="mt-1 text-2xl font-bold">{orderedFavoriteSitters.length}</p></Card>
       </div>
 
       {!households?.length || !pets?.length ? (
@@ -51,6 +62,38 @@ export default async function OwnerDashboardPage() {
           Pro odeslání dobré poptávky potřebujete alespoň jednu domácnost a jednoho mazlíčka. Díky tomu sitter hned ví, kde bude pomáhat a o koho půjde.
         </InfoBox>
       ) : null}
+
+      <Card className="mb-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Oblíbení sitteři</h2>
+            <p className="mt-1 text-sm text-stone-600">Uložení lidé, které chcete příště oslovit rychleji. Není to veřejný seznam.</p>
+          </div>
+          <ButtonLink href="/sitters" variant="secondary">Najít další</ButtonLink>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {orderedFavoriteSitters.map((sitter) => (
+            <Link key={sitter.user_id} href={`/sitters/${sitter.user_id}`} className="rounded-lg border border-forest-100 p-3 hover:bg-forest-50">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">{sitter.full_name}</h3>
+                  <p className="mt-1 text-sm text-stone-600">{sitter.city} · {sitter.neighborhood}</p>
+                </div>
+                <Badge tone="amber">Oblíbený</Badge>
+              </div>
+              <p className="mt-2 line-clamp-2 text-sm text-stone-700">{sitter.animal_experience}</p>
+              <p className="mt-2 text-sm font-semibold text-forest-900">{sitter.rate_range ?? "Cena dle domluvy"}</p>
+            </Link>
+          ))}
+          {!orderedFavoriteSitters.length ? (
+            <EmptyState
+              title="Zatím nemáte uloženého sittera"
+              text="V adresáři si uložte sittery, kteří působí vhodně pro vaši domácnost. Příště je najdete přímo tady."
+              action={<ButtonLink href="/sitters">Procházet sittery</ButtonLink>}
+            />
+          ) : null}
+        </div>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <Card>

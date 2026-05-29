@@ -53,6 +53,11 @@ export type Database = {
         Insert: Partial<SittingFeedback> & { agreement_id: string; request_id: string; owner_id: string; sitter_id: string; went_well: boolean; sitter_on_time: boolean; instructions_clear: boolean; would_book_again: boolean };
         Update: Partial<SittingFeedback>;
       };
+      owner_favorite_sitters: {
+        Row: OwnerFavoriteSitter;
+        Insert: Partial<OwnerFavoriteSitter> & { owner_id: string; sitter_id: string };
+        Update: Partial<OwnerFavoriteSitter>;
+      };
       trust_badges: {
         Row: TrustBadge;
         Insert: Partial<TrustBadge> & { sitter_id: string; badge_type: string; label: string };
@@ -253,6 +258,13 @@ export type SittingFeedback = {
   owner_note: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type OwnerFavoriteSitter = {
+  id: string;
+  owner_id: string;
+  sitter_id: string;
+  created_at: string;
 };
 
 export type TrustBadge = {

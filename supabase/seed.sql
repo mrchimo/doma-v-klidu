@@ -155,6 +155,13 @@ and exists (
   where sa.request_id = public.house_sitting_requests.id
 );
 
+insert into public.owner_favorite_sitters (owner_id, sitter_id)
+values
+  ('00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000201'),
+  ('00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000202'),
+  ('00000000-0000-0000-0000-000000000102','00000000-0000-0000-0000-000000000202')
+on conflict (owner_id, sitter_id) do nothing;
+
 insert into public.trust_badges (sitter_id, badge_type, label, verified_at)
 values
   ('00000000-0000-0000-0000-000000000201','email','ověřený e-mail', now()),

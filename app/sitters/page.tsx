@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import Link from "next/link";
+import { toggleFavoriteSitterAction } from "@/app/actions";
 import { Badge, ButtonLink, Card, EmptyState, Field, Header, Shell, inputClass } from "@/components/ui";
 import { getCurrentProfile } from "@/lib/auth";
 import { availabilityLabels, formatDate, trustSignalLabels } from "@/lib/labels";
@@ -29,6 +30,12 @@ export default async function SittersPage({ searchParams }: { searchParams: Prom
   if (filters.q) query = query.ilike("availability_notes", `%${filters.q}%`);
 
   const { data: sitters } = await query.order("is_featured", { ascending: false });
+  const { data: favorites } = profile?.role === "owner"
+    ? await supabase.from("owner_favorite_sitters").select("sitter_id").eq("owner_id", profile.id)
+    : { data: [] };
+  const favoriteSitterIds = new Set(favorites?.map((favorite) => favorite.sitter_id) ?? []);
+  const queryString = new URLSearchParams(Object.entries(filters).flatMap(([key, value]) => value ? [[key, value]] : [])).toString();
+  const currentPath = `/sitters${queryString ? `?${queryString}` : ""}`;
 
   return (
     <Shell>
@@ -65,12 +72,24 @@ export default async function SittersPage({ searchParams }: { searchParams: Prom
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {sitters?.map((sitter) => (
           <Card key={sitter.id}>
-            <div className="flex gap-3">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-forest-100 font-bold text-forest-800">{sitter.full_name?.slice(0, 1) ?? "S"}</div>
-              <div>
-                <h2 className="text-lg font-semibold">{sitter.full_name}</h2>
-                <p className="text-sm text-stone-600">{sitter.city} · {sitter.neighborhood}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex gap-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-forest-100 font-bold text-forest-800">{sitter.full_name?.slice(0, 1) ?? "S"}</div>
+                <div>
+                  <h2 className="text-lg font-semibold">{sitter.full_name}</h2>
+                  <p className="text-sm text-stone-600">{sitter.city} · {sitter.neighborhood}</p>
+                </div>
               </div>
+              {profile?.role === "owner" ? (
+                <form action={toggleFavoriteSitterAction}>
+                  <input type="hidden" name="sitter_id" value={sitter.user_id} />
+                  <input type="hidden" name="redirect_to" value={currentPath} />
+                  <input type="hidden" name="intent" value={favoriteSitterIds.has(sitter.user_id) ? "remove" : "add"} />
+                  <button className="rounded-full border border-forest-200 bg-white px-3 py-1.5 text-xs font-semibold text-forest-800 hover:bg-forest-50">
+                    {favoriteSitterIds.has(sitter.user_id) ? "Uloženo" : "Uložit"}
+                  </button>
+                </form>
+              ) : null}
             </div>
             <p className="mt-4 line-clamp-3 text-sm text-stone-700">{sitter.animal_experience}</p>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -86,7 +105,10 @@ export default async function SittersPage({ searchParams }: { searchParams: Prom
             {sitter.admin_public_note ? <p className="mt-3 rounded-lg bg-forest-50 p-3 text-sm leading-6 text-forest-900">{sitter.admin_public_note}</p> : null}
             {sitter.unavailable_until && sitter.unavailable_until >= today ? <p className="mt-3 rounded-lg bg-red-50 p-2 text-sm font-medium text-red-800">Nedostupný do {formatDate(sitter.unavailable_until)}</p> : null}
             <p className="mt-4 text-sm font-semibold">{sitter.rate_range ?? "Cena dle domluvy"}</p>
-            <div className="mt-4"><ButtonLink href={`/sitters/${sitter.user_id}`} variant="secondary">Zobrazit profil</ButtonLink></div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <ButtonLink href={`/sitters/${sitter.user_id}`} variant="secondary">Zobrazit profil</ButtonLink>
+              {favoriteSitterIds.has(sitter.user_id) ? <Badge tone="amber">Oblíbený</Badge> : null}
+            </div>
           </Card>
         ))}
       </div>
