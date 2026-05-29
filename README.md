@@ -63,7 +63,8 @@ Všechny demo účty mají heslo `password123`.
 - Sitter se registruje a odešle profil ke schválení.
 - Sitter nastaví jednoduchou dostupnost bez složitého kalendáře.
 - Neschválený sitter není ve veřejném adresáři.
-- Admin schválí nebo odmítne sittera a udržuje bezpečnostní profil sittera.
+- Admin schválí nebo odmítne sittera přes schvalovací checklist kvality profilu.
+- Admin u sitterů kontroluje telefon, bio, zkušenosti, reference, video a interní rizikové signály.
 - Schválený sitter je vidět v adresáři.
 - Majitel filtruje sittery podle lokality, péče, zkušeností a dostupnosti.
 - Majitel vidí veřejné signály důvěryhodnosti: ověřený telefon, zkontrolované reference, zkontrolovaný video medailonek a veřejnou poznámku admina.

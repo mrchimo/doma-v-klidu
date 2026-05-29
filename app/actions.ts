@@ -11,6 +11,7 @@ import {
   queueSitterRequestSentEmail,
   queueSittingReminderEmail
 } from "@/lib/email-notifications";
+import { getSitterQualityReview } from "@/lib/sitter-quality";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const roleSchema = z.enum(["owner", "sitter", "professional"]);
@@ -481,12 +482,27 @@ export async function approveSitterAction(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const userId = String(formData.get("user_id"));
   const approvalStatus = String(formData.get("approval_status")) as "approved" | "rejected" | "pending_approval";
-  const { data: existing } = await supabase.from("sitter_profiles").select("approval_status").eq("user_id", userId).maybeSingle();
+  const { data: existing } = await supabase
+    .from("sitter_profiles")
+    .select("approval_status, bio, animal_experience, reference_contact, video_intro_url, phone_verified, reference_checked, video_intro_reviewed, bio_reviewed, experience_reviewed, risk_reviewed, risk_flags")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!existing) redirect("/admin/sitters?error=missing_sitter");
+
+  if (approvalStatus === "approved") {
+    const review = getSitterQualityReview(existing);
+    if (!review.readyToApprove) {
+      redirect(`/admin/sitters?error=quality&missing=${encodeURIComponent(review.blockingItems.join(", "))}`);
+    }
+  }
+
   await supabase
     .from("sitter_profiles")
     .update({ approval_status: approvalStatus })
     .eq("user_id", userId);
-  if (approvalStatus === "approved" && existing?.approval_status !== "approved") await queueSitterApprovedEmail(userId);
+  if (approvalStatus === "approved" && existing.approval_status !== "approved") await queueSitterApprovedEmail(userId);
+  revalidatePath("/admin");
   revalidatePath("/admin/sitters");
   revalidatePath("/sitters");
 }
@@ -502,6 +518,11 @@ export async function updateSitterTrustAction(formData: FormData) {
       phone_verified: bool(formData, "phone_verified"),
       reference_checked: bool(formData, "reference_checked"),
       video_intro_reviewed: bool(formData, "video_intro_reviewed"),
+      bio_reviewed: bool(formData, "bio_reviewed"),
+      experience_reviewed: bool(formData, "experience_reviewed"),
+      risk_reviewed: bool(formData, "risk_reviewed"),
+      risk_flags: values(formData, "risk_flags"),
+      risk_notes: text(formData, "risk_notes"),
       is_featured: bool(formData, "is_featured"),
       admin_public_note: text(formData, "admin_public_note"),
       admin_private_note: text(formData, "admin_private_note")
@@ -509,6 +530,7 @@ export async function updateSitterTrustAction(formData: FormData) {
     .eq("user_id", userId);
 
   if (error) redirect(`/admin/sitters?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin");
   revalidatePath("/admin/sitters");
   revalidatePath("/sitters");
   revalidatePath(`/sitters/${userId}`);

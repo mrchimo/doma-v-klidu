@@ -70,7 +70,20 @@ export const availabilityLabels: Record<string, string> = {
 export const trustSignalLabels: Record<string, string> = {
   phone_verified: "Ověřený telefon",
   reference_checked: "Reference ověřena",
-  video_intro_reviewed: "Video zkontrolováno"
+  video_intro_reviewed: "Video zkontrolováno",
+  bio_reviewed: "Bio zkontrolováno",
+  experience_reviewed: "Zkušenosti zkontrolovány",
+  risk_reviewed: "Rizika zkontrolována"
+};
+
+export const sitterRiskFlagLabels: Record<string, string> = {
+  missing_reference: "Chybí reference",
+  short_experience: "Stručné zkušenosti",
+  unclear_motivation: "Nejasná motivace",
+  inconsistent_availability: "Nejasná dostupnost",
+  communication_risk: "Komunikace ke kontrole",
+  outside_mvp_scope: "Mimo rozsah MVP",
+  other: "Jiné riziko"
 };
 
 export function labelFor(labels: Record<string, string>, value?: string | null) {

@@ -157,6 +157,11 @@ export type SitterProfile = {
   phone_verified: boolean;
   reference_checked: boolean;
   video_intro_reviewed: boolean;
+  bio_reviewed: boolean;
+  experience_reviewed: boolean;
+  risk_reviewed: boolean;
+  risk_flags: string[];
+  risk_notes: string | null;
   admin_public_note: string | null;
   admin_private_note: string | null;
   approval_status: "pending_approval" | "approved" | "rejected";
