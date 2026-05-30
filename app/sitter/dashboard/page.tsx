@@ -1,11 +1,29 @@
-import { acceptSitterRequestAction, declineSitterRequestAction } from "@/app/actions";
-import { Badge, ButtonLink, Card, EmptyState, Header, InfoBox, Shell, textAreaClass } from "@/components/ui";
+import { acceptSitterRequestAction, declineSitterRequestAction, submitCalmReportAction } from "@/app/actions";
+import { CalmReportCard } from "@/components/calm-report-card";
+import { Badge, ButtonLink, Card, EmptyState, Field, Header, InfoBox, Shell, inputClass, textAreaClass } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
+import { withCalmReportPhotoUrls } from "@/lib/calm-reports";
 import { approvalStatusLabels, checklistCategoryLabels, formatDate, sitterRequestStatusLabels, sittingTypeLabels, labelFor } from "@/lib/labels";
 import { evaluateSitterFit } from "@/lib/sitter-fit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { CalmReport } from "@/lib/types/database";
 
-export default async function SitterDashboardPage() {
+const reportTaskOptions = [
+  ["done", "Hotovo"],
+  ["not_needed", "Není potřeba"],
+  ["attention", "Vyžaduje pozornost"]
+];
+
+const reportErrorLabels: Record<string, string> = {
+  report_agreement: "Report lze odeslat jen k aktivní domluvě.",
+  report_photo_type: "Fotka musí být ve formátu JPEG, PNG nebo WebP.",
+  report_photo_size: "Fotka je příliš velká. Maximum je 5 MB.",
+  report_photo_upload: "Fotku se nepodařilo nahrát. Zkuste to prosím znovu.",
+  report_save: "Report se nepodařilo uložit. Zkuste to prosím znovu."
+};
+
+export default async function SitterDashboardPage({ searchParams }: { searchParams?: Promise<{ error?: string }> }) {
+  const params = await searchParams;
   const { profile } = await requireProfile(["sitter", "professional"]);
   const supabase = await createSupabaseServerClient();
   const [{ data: sitterProfile }, { data: requests }, { data: agreements }] = await Promise.all([
@@ -22,6 +40,12 @@ export default async function SitterDashboardPage() {
       .eq("status", "confirmed")
       .order("confirmed_at", { ascending: false })
   ]);
+  const agreementIds = agreements?.map((agreement) => agreement.id) ?? [];
+  const { data: calmReports } = agreementIds.length
+    ? await supabase.from("calm_reports").select("*").in("agreement_id", agreementIds)
+    : { data: [] };
+  const calmReportsWithPhotos = await withCalmReportPhotoUrls<CalmReport>((calmReports ?? []) as CalmReport[]);
+  const calmReportByAgreementId = new Map(calmReportsWithPhotos.map((report) => [report?.agreement_id, report]));
   const requestIds = requests?.map((item) => item.request_id).filter(Boolean) ?? [];
   const { data: checklistItems } = requestIds.length
     ? await supabase.from("handover_checklist_items").select("*").in("request_id", requestIds).order("sort_order", { ascending: true })
@@ -62,26 +86,78 @@ export default async function SitterDashboardPage() {
         </Card>
       </div>
 
-      <Card className="mt-5">
+      {params?.error ? (
+        <Card className="mt-5 border-amber-200 bg-amber-50 shadow-none">
+          <p className="text-sm font-semibold text-amber-950">{reportErrorLabels[params.error] ?? params.error}</p>
+        </Card>
+      ) : null}
+
+      <Card className="mt-5" id="calm-reports">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold">Domluvená hlídání</h2>
-            <p className="mt-1 text-sm text-stone-600">Potvrzené termíny, které už majitel označil jako platnou domluvu.</p>
+            <p className="mt-1 text-sm text-stone-600">Potvrzené termíny a jeden stručný klidový report pro majitele. Report můžete během hlídání aktualizovat.</p>
           </div>
           <Badge tone={agreements?.length ? "green" : "muted"}>{agreements?.length ?? 0} aktivní</Badge>
         </div>
         <div className="mt-4 grid gap-3">
-          {agreements?.map((agreement) => (
-            <div key={agreement.id} className="rounded-lg border border-forest-100 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-semibold">{agreement.request?.title}</p>
-                <Badge>Domluveno</Badge>
+          {agreements?.map((agreement) => {
+            const report = calmReportByAgreementId.get(agreement.id);
+
+            return (
+              <div key={agreement.id} className="rounded-lg border border-forest-100 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-semibold">{agreement.request?.title}</p>
+                  <Badge>Domluveno</Badge>
+                </div>
+                <p className="mt-1 text-sm text-stone-600">{agreement.owner?.full_name} · {formatDate(agreement.request?.start_date)} - {formatDate(agreement.request?.end_date)}</p>
+                <p className="mt-1 text-sm text-stone-600">{labelFor(sittingTypeLabels, agreement.request?.sitting_type)}</p>
+                {agreement.owner_note ? <p className="mt-2 rounded-lg bg-linen p-3 text-sm leading-6 text-stone-700">{agreement.owner_note}</p> : null}
+                {report ? <div className="mt-3"><CalmReportCard report={report} /></div> : null}
+
+                <form action={submitCalmReportAction} className="mt-3 grid gap-3 rounded-lg bg-linen p-4">
+                  <input type="hidden" name="agreement_id" value={agreement.id} />
+                  <input type="hidden" name="request_id" value={agreement.request_id} />
+                  <div>
+                    <h3 className="font-semibold text-forest-950">{report ? "Aktualizovat klidový report" : "Poslat klidový report"}</h3>
+                    <p className="mt-1 text-sm leading-6 text-stone-700">Jedna praktická aktualizace místo chatu. Pokud je něco neobvyklé, označte to a napište krátkou poznámku.</p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Mazlíček" name={`pet_status_${agreement.id}`}>
+                      <select className={inputClass} id={`pet_status_${agreement.id}`} name="pet_status" defaultValue={report?.pet_status ?? "okay"}>
+                        <option value="okay">Je v pořádku</option>
+                        <option value="attention">Vyžaduje pozornost</option>
+                      </select>
+                    </Field>
+                    <Field label="Krmení" name={`feeding_status_${agreement.id}`}>
+                      <select className={inputClass} id={`feeding_status_${agreement.id}`} name="feeding_status" defaultValue={report?.feeding_status ?? "done"}>
+                        {reportTaskOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Venčení" name={`walking_status_${agreement.id}`}>
+                      <select className={inputClass} id={`walking_status_${agreement.id}`} name="walking_status" defaultValue={report?.walking_status ?? "done"}>
+                        {reportTaskOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Kontrola bytu" name={`home_check_status_${agreement.id}`}>
+                      <select className={inputClass} id={`home_check_status_${agreement.id}`} name="home_check_status" defaultValue={report?.home_check_status ?? "done"}>
+                        {reportTaskOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="Krátká poznámka" name={`report_note_${agreement.id}`}>
+                    <textarea className={textAreaClass} id={`report_note_${agreement.id}`} name="note" defaultValue={report?.note ?? ""} placeholder="Např. Mína snědla večeři, byt je v pořádku, zítra dorazím opět ráno." />
+                  </Field>
+                  <Field label="Fotka (volitelné, max. 5 MB)" name={`report_photo_${agreement.id}`}>
+                    <input className={inputClass} id={`report_photo_${agreement.id}`} name="photo" type="file" accept="image/jpeg,image/png,image/webp" />
+                  </Field>
+                  <button className="min-h-11 rounded-lg bg-forest-700 px-4 py-2 text-sm font-semibold text-white hover:bg-forest-800">
+                    {report ? "Uložit aktualizaci reportu" : "Odeslat report majiteli"}
+                  </button>
+                </form>
               </div>
-              <p className="mt-1 text-sm text-stone-600">{agreement.owner?.full_name} · {formatDate(agreement.request?.start_date)} - {formatDate(agreement.request?.end_date)}</p>
-              <p className="mt-1 text-sm text-stone-600">{labelFor(sittingTypeLabels, agreement.request?.sitting_type)}</p>
-              {agreement.owner_note ? <p className="mt-2 rounded-lg bg-linen p-3 text-sm leading-6 text-stone-700">{agreement.owner_note}</p> : null}
-            </div>
-          ))}
+            );
+          })}
           {!agreements?.length ? <p className="text-sm text-stone-600">Zatím nemáte žádné potvrzené hlídání.</p> : null}
         </div>
       </Card>

@@ -162,6 +162,11 @@ values
   ('00000000-0000-0000-0000-000000000102','00000000-0000-0000-0000-000000000202')
 on conflict (owner_id, sitter_id) do nothing;
 
+insert into public.calm_reports (agreement_id, request_id, owner_id, sitter_id, pet_status, feeding_status, walking_status, home_check_status, note)
+values
+  ('50000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000201','okay','done','not_needed','done','Mína snědla večeři, toaleta je čistá a byt je v pořádku. Zítra přijdu znovu ráno.')
+on conflict (agreement_id) do nothing;
+
 insert into public.trust_badges (sitter_id, badge_type, label, verified_at)
 values
   ('00000000-0000-0000-0000-000000000201','email','ověřený e-mail', now()),

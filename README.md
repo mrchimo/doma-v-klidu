@@ -68,6 +68,8 @@ Všechny demo účty mají heslo `password123`.
 - Schválený sitter je vidět v adresáři.
 - Majitel filtruje sittery podle lokality, péče, zkušeností a dostupnosti.
 - Majitel si může uložit oblíbené schválené sittery a později je rychleji znovu oslovit.
+- Sitter během potvrzeného hlídání odešle jeden strukturovaný klidový report se stavem péče, domácnosti, poznámkou a volitelnou soukromou fotkou.
+- Majitel dostane na nový klidový report e-mailovou notifikaci a report vidí v detailu poptávky.
 - Majitel vidí veřejné signály důvěryhodnosti: ověřený telefon, zkontrolované reference, zkontrolovaný video medailonek a veřejnou poznámku admina.
 - Majitel i sitter vidí jednoduché porovnání shody mezi poptávkou a profilem sittera.
 - Majitel vidí stavovou osu poptávky od vytvoření přes oslovení sittera až po připravené předání a dokončení.

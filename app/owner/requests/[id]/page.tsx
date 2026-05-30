@@ -1,7 +1,9 @@
 import { CheckCircle2, Circle, Clock3 } from "lucide-react";
 import { addHandoverChecklistItemAction, cancelSitterRequestAction, cancelSittingAgreementAction, completeSittingWithFeedbackAction, confirmSittingAgreementAction, deleteHandoverChecklistItemAction } from "@/app/actions";
+import { CalmReportCard } from "@/components/calm-report-card";
 import { Badge, ButtonLink, Card, EmptyState, Field, Header, InfoBox, Shell, SubmitButton, inputClass, textAreaClass } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
+import { withCalmReportPhotoUrl } from "@/lib/calm-reports";
 import { checklistCategoryLabels, formatDate, labelFor, requestStatusLabels, requirementLabels, sitterRequestStatusLabels, sittingAgreementStatusLabels, sittingTypeLabels, taskLabels } from "@/lib/labels";
 import { buildRequestTimeline } from "@/lib/request-timeline";
 import { evaluateSitterFit } from "@/lib/sitter-fit";
@@ -37,7 +39,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const { profile } = await requireProfile(["owner"]);
   const supabase = await createSupabaseServerClient();
-  const [{ data: request }, { data: sent }, { data: requestPets }, { data: checklist }, { data: agreement }, { data: feedback }] = await Promise.all([
+  const [{ data: request }, { data: sent }, { data: requestPets }, { data: checklist }, { data: agreement }, { data: feedback }, { data: calmReport }] = await Promise.all([
     supabase.from("house_sitting_requests").select("*, household:households(name, city, neighborhood)").eq("id", id).eq("owner_id", profile.id).single(),
     supabase.from("sitter_requests").select("*, sitter:profiles!sitter_requests_sitter_id_fkey(full_name, city, neighborhood)").eq("request_id", id).eq("owner_id", profile.id),
     supabase.from("request_pets").select("pet:pets(name, species, breed)").eq("request_id", id),
@@ -56,8 +58,15 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
       .select("*")
       .eq("request_id", id)
       .eq("owner_id", profile.id)
+      .maybeSingle(),
+    supabase
+      .from("calm_reports")
+      .select("*")
+      .eq("request_id", id)
+      .eq("owner_id", profile.id)
       .maybeSingle()
   ]);
+  const calmReportWithPhoto = await withCalmReportPhotoUrl(calmReport);
   const sitterIds = sent?.map((item) => item.sitter_id).filter(Boolean) ?? [];
   const { data: publicSitters } = sitterIds.length
     ? await supabase.from("public_sitters").select("*").in("user_id", sitterIds)
@@ -294,6 +303,24 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
                     <SubmitButton>Uzavřít hlídání a uložit zpětnou vazbu</SubmitButton>
                   </form>
                 )}
+              </Card>
+            ) : null}
+
+            {calmReportWithPhoto ? (
+              <Card id="calm-report">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold">Klidový report během hlídání</h2>
+                    <p className="mt-1 text-sm text-stone-600">Stručná strukturovaná aktualizace od sittera bez otevírání chatu.</p>
+                  </div>
+                  <Badge tone="green">Aktualizováno</Badge>
+                </div>
+                <CalmReportCard report={calmReportWithPhoto} />
+              </Card>
+            ) : agreement?.status === "confirmed" ? (
+              <Card id="calm-report">
+                <h2 className="text-xl font-semibold">Klidový report během hlídání</h2>
+                <p className="mt-2 text-sm leading-6 text-stone-600">Sitter zatím neposlal průběžnou aktualizaci. Jakmile report odešle, uvidíte stav péče a případnou fotku tady.</p>
               </Card>
             ) : null}
 

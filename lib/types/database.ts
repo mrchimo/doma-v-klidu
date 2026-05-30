@@ -58,6 +58,11 @@ export type Database = {
         Insert: Partial<OwnerFavoriteSitter> & { owner_id: string; sitter_id: string };
         Update: Partial<OwnerFavoriteSitter>;
       };
+      calm_reports: {
+        Row: CalmReport;
+        Insert: Partial<CalmReport> & { agreement_id: string; request_id: string; owner_id: string; sitter_id: string; pet_status: CalmReportPetStatus; feeding_status: CalmReportTaskStatus; walking_status: CalmReportTaskStatus; home_check_status: CalmReportTaskStatus };
+        Update: Partial<CalmReport>;
+      };
       trust_badges: {
         Row: TrustBadge;
         Insert: Partial<TrustBadge> & { sitter_id: string; badge_type: string; label: string };
@@ -267,6 +272,26 @@ export type OwnerFavoriteSitter = {
   created_at: string;
 };
 
+export type CalmReportPetStatus = "okay" | "attention";
+export type CalmReportTaskStatus = "done" | "not_needed" | "attention";
+
+export type CalmReport = {
+  id: string;
+  agreement_id: string;
+  request_id: string;
+  owner_id: string;
+  sitter_id: string;
+  pet_status: CalmReportPetStatus;
+  feeding_status: CalmReportTaskStatus;
+  walking_status: CalmReportTaskStatus;
+  home_check_status: CalmReportTaskStatus;
+  note: string | null;
+  photo_path: string | null;
+  submitted_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type TrustBadge = {
   id: string;
   sitter_id: string;
@@ -276,7 +301,7 @@ export type TrustBadge = {
   created_at: string;
 };
 
-export type EmailNotificationType = "sitter_request_sent" | "sitter_request_responded" | "sitter_approved" | "sitting_reminder";
+export type EmailNotificationType = "sitter_request_sent" | "sitter_request_responded" | "sitter_approved" | "sitting_reminder" | "calm_report_submitted";
 
 export type EmailNotification = {
   id: string;

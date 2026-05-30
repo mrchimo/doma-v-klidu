@@ -1,7 +1,14 @@
+import { CalmReportCard } from "@/components/calm-report-card";
 import { Badge, Card, Field, Header, Shell, inputClass } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
+import { calmReportNeedsAttention, withCalmReportPhotoUrls } from "@/lib/calm-reports";
 import { formatDate, labelFor, requestStatusLabels, sittingTypeLabels } from "@/lib/labels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { CalmReport } from "@/lib/types/database";
+
+type CalmReportWithSitter = CalmReport & {
+  sitter: { full_name: string | null; city: string | null } | null;
+};
 
 function feedbackAnswer(value: boolean) {
   return value ? "Ano" : "Ne";
@@ -30,8 +37,17 @@ export default async function AdminRequestsPage({ searchParams }: { searchParams
       .select("*, sitter:profiles!sitting_feedback_sitter_id_fkey(full_name, city)")
       .in("request_id", requestIds)
     : { data: [] };
+  const { data: calmReports } = requestIds.length
+    ? await supabase
+      .from("calm_reports")
+      .select("*, sitter:profiles!calm_reports_sitter_id_fkey(full_name, city)")
+      .in("request_id", requestIds)
+    : { data: [] };
+  const calmReportsWithPhotos = await withCalmReportPhotoUrls<CalmReportWithSitter>((calmReports ?? []) as CalmReportWithSitter[]);
   const feedbackByRequestId = new Map(feedbackItems?.map((feedback) => [feedback.request_id, feedback]) ?? []);
+  const calmReportByRequestId = new Map(calmReportsWithPhotos.map((report) => [report?.request_id, report]));
   const negativeSignals = feedbackItems?.filter((feedback) => !feedback.went_well || !feedback.sitter_on_time || !feedback.instructions_clear || !feedback.would_book_again).length ?? 0;
+  const reportAttentionCount = calmReports?.filter(calmReportNeedsAttention).length ?? 0;
 
   return (
     <Shell>
@@ -39,11 +55,12 @@ export default async function AdminRequestsPage({ searchParams }: { searchParams
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Poptávky hlídání</h1>
-          <p className="mt-2 text-stone-600">Dohled nad stavem poptávek a interní zpětnou vazbou po dokončení.</p>
+          <p className="mt-2 text-stone-600">Dohled nad stavem poptávek, průběžnými reporty a interní zpětnou vazbou po dokončení.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge tone={feedbackItems?.length ? "green" : "muted"}>{feedbackItems?.length ?? 0} feedbacků</Badge>
           <Badge tone={negativeSignals ? "amber" : "muted"}>{negativeSignals} k prověření</Badge>
+          <Badge tone={reportAttentionCount ? "amber" : "muted"}>{reportAttentionCount} reportů s pozorností</Badge>
         </div>
       </div>
       <form className="mt-5 grid gap-3 rounded-lg bg-white p-4 shadow-soft sm:grid-cols-4">
@@ -55,6 +72,7 @@ export default async function AdminRequestsPage({ searchParams }: { searchParams
       <div className="mt-5 grid gap-4">
         {requests?.map((request) => {
           const feedback = feedbackByRequestId.get(request.id);
+          const calmReport = calmReportByRequestId.get(request.id);
 
           return (
             <Card key={request.id}>
@@ -66,6 +84,11 @@ export default async function AdminRequestsPage({ searchParams }: { searchParams
                 </div>
                 <div className="flex gap-2"><Badge>{requestStatusLabels[request.status] ?? request.status}</Badge><Badge tone={request.urgency === "urgent" ? "amber" : "muted"}>{request.urgency}</Badge></div>
               </div>
+              {calmReport ? (
+                <div className="mt-4 rounded-lg bg-linen p-4">
+                  <CalmReportCard report={calmReport} subtitle={calmReport.sitter?.full_name ?? "Sitter"} />
+                </div>
+              ) : null}
               {feedback ? (
                 <div className="mt-4 rounded-lg bg-linen p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

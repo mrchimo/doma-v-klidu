@@ -6,16 +6,19 @@ import { z } from "zod";
 import { dashboardForRole, requireProfile } from "@/lib/auth";
 import {
   dispatchDueEmailNotifications,
+  queueCalmReportSubmittedEmail,
   queueSitterApprovedEmail,
   queueSitterRequestResponseEmail,
   queueSitterRequestSentEmail,
   queueSittingReminderEmail
 } from "@/lib/email-notifications";
 import { getSitterQualityReview } from "@/lib/sitter-quality";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
 const roleSchema = z.enum(["owner", "sitter", "professional"]);
 const checklistCategorySchema = z.enum(["pet_care", "home", "access", "safety", "plants_mail", "other"]);
+const calmReportPetStatusSchema = z.enum(["okay", "attention"]);
+const calmReportTaskStatusSchema = z.enum(["done", "not_needed", "attention"]);
 
 function bool(formData: FormData, key: string) {
   return formData.get(key) === "on";
@@ -38,6 +41,13 @@ function internalPath(value: FormDataEntryValue | null, fallback = "/") {
 
 function yesNo(formData: FormData, key: string) {
   return z.enum(["yes", "no"]).parse(formData.get(key)) === "yes";
+}
+
+function reportPhotoExtension(type: string) {
+  if (type === "image/jpeg") return "jpg";
+  if (type === "image/png") return "png";
+  if (type === "image/webp") return "webp";
+  return null;
 }
 
 function defaultChecklistItems(tasks: string[], ownerId: string, requestId: string) {
@@ -556,6 +566,99 @@ export async function completeSittingWithFeedbackAction(formData: FormData) {
   revalidatePath("/admin/requests");
   revalidatePath(`/owner/requests/${parsed.request_id}`);
   redirect(`/owner/requests/${parsed.request_id}#feedback`);
+}
+
+export async function submitCalmReportAction(formData: FormData) {
+  const { user } = await requireProfile(["sitter", "professional"]);
+  const supabase = await createSupabaseServerClient();
+  const parsed = z.object({
+    agreement_id: z.string().uuid(),
+    request_id: z.string().uuid(),
+    pet_status: calmReportPetStatusSchema,
+    feeding_status: calmReportTaskStatusSchema,
+    walking_status: calmReportTaskStatusSchema,
+    home_check_status: calmReportTaskStatusSchema,
+    note: z.string().max(1000).optional()
+  }).parse({
+    agreement_id: formData.get("agreement_id"),
+    request_id: formData.get("request_id"),
+    pet_status: formData.get("pet_status"),
+    feeding_status: formData.get("feeding_status"),
+    walking_status: formData.get("walking_status"),
+    home_check_status: formData.get("home_check_status"),
+    note: formData.get("note") ?? undefined
+  });
+
+  const { data: agreement } = await supabase
+    .from("sitting_agreements")
+    .select("id, request_id, owner_id, sitter_id, status")
+    .eq("id", parsed.agreement_id)
+    .eq("request_id", parsed.request_id)
+    .eq("sitter_id", user.id)
+    .eq("status", "confirmed")
+    .single();
+
+  if (!agreement) redirect("/sitter/dashboard?error=report_agreement");
+
+  const { data: existingReport } = await supabase
+    .from("calm_reports")
+    .select("id, photo_path")
+    .eq("agreement_id", agreement.id)
+    .eq("sitter_id", user.id)
+    .maybeSingle();
+
+  const photo = formData.get("photo");
+  const hasPhoto = photo instanceof File && photo.size > 0;
+  let photoPath = existingReport?.photo_path ?? null;
+  let uploadedPhotoPath: string | null = null;
+  const adminSupabase = createSupabaseAdminClient();
+
+  if (hasPhoto) {
+    const extension = reportPhotoExtension(photo.type);
+    if (!extension) redirect("/sitter/dashboard?error=report_photo_type");
+    if (photo.size > 5 * 1024 * 1024) redirect("/sitter/dashboard?error=report_photo_size");
+
+    uploadedPhotoPath = `${user.id}/${agreement.id}/${crypto.randomUUID()}.${extension}`;
+    const { error: photoError } = await adminSupabase.storage
+      .from("calm-report-photos")
+      .upload(uploadedPhotoPath, await photo.arrayBuffer(), { contentType: photo.type });
+
+    if (photoError) redirect(`/sitter/dashboard?error=${encodeURIComponent("report_photo_upload")}`);
+    photoPath = uploadedPhotoPath;
+  }
+
+  const { data: report, error } = await supabase
+    .from("calm_reports")
+    .upsert({
+      agreement_id: agreement.id,
+      request_id: agreement.request_id,
+      owner_id: agreement.owner_id,
+      sitter_id: user.id,
+      pet_status: parsed.pet_status,
+      feeding_status: parsed.feeding_status,
+      walking_status: parsed.walking_status,
+      home_check_status: parsed.home_check_status,
+      note: parsed.note?.trim() ? parsed.note.trim() : null,
+      photo_path: photoPath,
+      submitted_at: new Date().toISOString()
+    }, { onConflict: "agreement_id" })
+    .select("id")
+    .single();
+
+  if (error || !report) {
+    if (uploadedPhotoPath) await adminSupabase.storage.from("calm-report-photos").remove([uploadedPhotoPath]);
+    redirect(`/sitter/dashboard?error=${encodeURIComponent("report_save")}`);
+  }
+
+  if (uploadedPhotoPath && existingReport?.photo_path) {
+    await adminSupabase.storage.from("calm-report-photos").remove([existingReport.photo_path]);
+  }
+
+  await queueCalmReportSubmittedEmail(report.id);
+  revalidatePath("/sitter/dashboard");
+  revalidatePath(`/owner/requests/${agreement.request_id}`);
+  revalidatePath("/admin/requests");
+  redirect("/sitter/dashboard#calm-reports");
 }
 
 async function updateSitterRequestStatus(formData: FormData, status: "accepted" | "declined") {

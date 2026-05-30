@@ -8,7 +8,8 @@ const typeLabels: Record<string, string> = {
   sitter_request_sent: "Žádost sitterovi",
   sitter_request_responded: "Odpověď majiteli",
   sitter_approved: "Schválení sittera",
-  sitting_reminder: "Připomenutí hlídání"
+  sitting_reminder: "Připomenutí hlídání",
+  calm_report_submitted: "Klidový report"
 };
 
 function statusTone(status: string) {

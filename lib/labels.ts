@@ -95,3 +95,8 @@ export function formatDate(value?: string | null) {
   if (!value) return "Neuvedeno";
   return new Intl.DateTimeFormat("cs-CZ", { day: "numeric", month: "long", year: "numeric" }).format(new Date(value));
 }
+
+export function formatDateTime(value?: string | null) {
+  if (!value) return "Neuvedeno";
+  return new Intl.DateTimeFormat("cs-CZ", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}

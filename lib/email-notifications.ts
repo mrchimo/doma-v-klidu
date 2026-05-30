@@ -313,3 +313,32 @@ export async function queueSittingReminderEmail(agreementId: string) {
     logNotificationError("queueSittingReminderEmail", error);
   }
 }
+
+export async function queueCalmReportSubmittedEmail(reportId: string) {
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data } = await supabase
+      .from("calm_reports")
+      .select("id, request_id, owner_id, pet_status, request:house_sitting_requests(title), sitter:profiles!calm_reports_sitter_id_fkey(full_name)")
+      .eq("id", reportId)
+      .single();
+
+    if (!data) return;
+    const request = one(data.request);
+    const sitter = one(data.sitter);
+    await queueEmailNotification({
+      recipientId: data.owner_id,
+      notificationType: "calm_report_submitted",
+      subject: `Nový klidový report: ${request?.title ?? "hlídání"}`,
+      body: [
+        `${sitter?.full_name ?? "Sitter"} odeslal klidový report během hlídání.`,
+        data.pet_status === "okay" ? "Mazlíček je podle reportu v pořádku." : "Report obsahuje bod, který vyžaduje vaši pozornost.",
+        "Podrobnosti otevřete v aplikaci."
+      ].join("\n"),
+      actionPath: `/owner/requests/${data.request_id}#calm-report`,
+      relatedRequestId: data.request_id
+    });
+  } catch (error) {
+    logNotificationError("queueCalmReportSubmittedEmail", error);
+  }
+}
